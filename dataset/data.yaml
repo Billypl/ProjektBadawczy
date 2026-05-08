@@ -1,0 +1,11 @@
+names:
+  0: water
+  1: sky
+  2: boat
+  3: bridge
+  4: vegetation
+nc: 5
+path: D:\billy\coding\badawczy\dataset
+train: images/train
+val: images/all
+test: images/all      # ← dodaj to

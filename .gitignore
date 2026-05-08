@@ -1,0 +1,4 @@
+.venv
+runs/segment/output/*
+tes
+.idea
