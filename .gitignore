@@ -1,4 +1,6 @@
 .venv
 runs/segment/output/*
+stereo/dataset/*
+stereo/results/*
 tes
 .idea
