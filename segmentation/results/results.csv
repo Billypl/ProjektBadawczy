@@ -1,0 +1,2 @@
+date,git_commit,exp_name,model,train_data,eval_split,input_res,F1,mu,mIoU,Q,fps,hardware,notes
+2026-11-08,5a3294b,m0_ewasr_val,ewasr_resnet18,MaSTr1325,val,512x384,49.32,59.27,85.06,41.95,,NVIDIA GeForce RTX 5070 Ti,"pretrained weights, no IMU, no training"

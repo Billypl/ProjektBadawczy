@@ -74,3 +74,24 @@ Checks on the actual files (2026-11-08):
 - Scene types: train 568 river / 2036 sea, val 79 river / 119 sea, test 487 river / 716 sea. Reflections in val: 84 none, 103 moderate, 10 heavy.
 - **LaRS train already contains MaSTr1325** (1323 `mastr_*` images, all 1278x958). Val and test contain no MaSTr images. Consequences: (1) "LaRS + MaSTr1325" training would duplicate data, only MaSTr1478 extras add anything; (2) eWaSR weights (trained on MaSTr1325) saw about half of LaRS train, but nothing from val, so the M0 val result is not leaked.
 - Resolution mix differs: half of train is 1278x958 (MaSTr), val/test are mostly 1920x1080 and 1280x720.
+
+## 2026-11-08 - M0: eWaSR baseline on LaRS val
+
+- What: `ewasr_resnet18` (no IMU), official weights trained on MaSTr1325, no training on LaRS. Input resized to 512x384 (MaSTr training resolution), logits upsampled bilinearly to the original size. Run: `runs/m0_ewasr_val/`.
+- Why: zero-cost baseline; shows how a coastal-sea model transfers to the more diverse LaRS (lakes, rivers, other sensors).
+- Result (lars_evaluator, val, 198 images): **F1 49.3, mu 59.3, mIoU 85.1, Q 42.0**. Detection: TP 837, FP 1450, FN 270 -> precision 36.6, recall 75.6. IoU obstacle 76.2, water 88.7, sky 90.3.
+- Breakdown (`python -m usvseg.eval.subsets --exp m0_ewasr_val`, aggregates evaluator TP/FP/FN per frame):
+
+| subset | n | TP | FP | FN | Pr | Re | F1 |
+|---|---|---|---|---|---|---|---|
+| river_like | 79 | 128 | 777 | 21 | 14.1 | 85.9 | 24.3 |
+| sea_like | 119 | 709 | 673 | 249 | 51.3 | 74.0 | 60.6 |
+| reflections: none | 84 | 476 | 602 | 127 | 44.2 | 78.9 | 56.6 |
+| reflections: moderate | 103 | 358 | 767 | 143 | 31.8 | 71.5 | 44.0 |
+| reflections: heavy | 10 | 3 | 80 | 0 | 3.6 | 100 | 7.0 |
+
+- Observed errors (`runs/checks/m0_worst_fp/`, top-6 frames by FP):
+  - Sun glitter on open sea predicted as obstacle blobs around the horizon (`inhouse_seq_155_00012`, 32 FP).
+  - Narrow jungle river with brown water (`yt055_02_00114`): water predicted as sky/obstacle, foliage partly as water. Pure domain gap, MaSTr has nothing like it.
+- Conclusion: the low F1 comes from false positives, not misses (recall 75.6). River scenes are much worse than sea (F1 24 vs 61), and F1 drops with reflection strength. This supports H3 (sea-trained model degrades on rivers) and motivates H2 (reflection/glitter FPs). Note the val set is small (79 river frames, 10 heavy-reflection frames), so subset numbers are noisy.
+- Caveat: `mu_frames` in `subsets.py` output is a mean of per-frame WE_acc and is not the global mu; only the global numbers go to the report.
