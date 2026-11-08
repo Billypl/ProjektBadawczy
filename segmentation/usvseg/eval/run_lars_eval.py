@@ -51,10 +51,10 @@ def build_config(exp_dir: Path, exp: str, split: str, root: Path) -> Path:
     return cfg
 
 
-def append_result(row: dict) -> None:
-    RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
-    new = not RESULTS_CSV.exists()
-    with RESULTS_CSV.open("a", newline="") as f:
+def append_result(row: dict, path: Path = RESULTS_CSV) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists()
+    with path.open("a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         if new:
             w.writeheader()
@@ -72,6 +72,8 @@ def main() -> None:
     ap.add_argument("--notes", default="")
     ap.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     ap.add_argument("--no-log", action="store_true", help="do not append to results.csv")
+    ap.add_argument("--results-csv", type=Path, default=RESULTS_CSV,
+                    help="e.g. results/dev_selection.csv for tuning runs on dev")
     args = ap.parse_args()
 
     exp_dir = REPO / "runs" / args.exp
@@ -101,8 +103,8 @@ def main() -> None:
         "fps": args.fps,
         "hardware": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
         "notes": args.notes,
-    })
-    print(f"appended to {RESULTS_CSV}")
+    }, args.results_csv)
+    print(f"appended to {args.results_csv}")
 
 
 if __name__ == "__main__":
