@@ -55,7 +55,7 @@ def append_result(row: dict) -> None:
     RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
     new = not RESULTS_CSV.exists()
     with RESULTS_CSV.open("a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         if new:
             w.writeheader()
         w.writerow(row)
