@@ -1,3 +1,5 @@
 date,git_commit,exp_name,model,train_data,eval_split,input_res,F1,mu,mIoU,Q,fps,hardware,notes
 2026-11-08,5a3294b,m0_ewasr_val,ewasr_resnet18,MaSTr1325,val,512x384,49.32,59.27,85.06,41.95,,NVIDIA GeForce RTX 5070 Ti,"pretrained weights, no IMU, no training"
 2026-11-08,d642d06,m1_segformer_b2_val,segformer_b2,LaRS train (-dev),val,keep-ratio 2048x1024,69.77,76.4,96.68,67.46,,NVIDIA GeForce RTX 5070 Ti,"30 epochs, crop 512x1024, last checkpoint"
+2026-11-08,5af6a15,m2_yolo26s_val_unobst,yolo26s_seg,LaRS train (-dev),val,1024,71.59,74.02,95.36,68.27,,NVIDIA GeForce RTX 5070 Ti,"50 epochs, best.pt (dev), conf 0.25, unassigned -> obst"
+2026-11-08,5af6a15-dirty,m2_yolo26s_val_unwater,yolo26s_seg,LaRS train (-dev),val,1024,73.15,74.4,95.38,69.77,,NVIDIA GeForce RTX 5070 Ti,"50 epochs, best.pt (dev), conf 0.25, unassigned -> water"

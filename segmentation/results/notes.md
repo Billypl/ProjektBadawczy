@@ -123,3 +123,46 @@ Checks on the actual files (2026-11-08):
 - Result (lars_evaluator, val): **F1 69.8, mu 76.4, mIoU 96.7, Q 67.5**. TP 943, FP 653, FN 164 -> precision 59.1, recall 85.2. Close to the published SegFormer (MiT-B2) LaRS test numbers (70.0 / 78.6 / 96.8 / 67.8).
 - Breakdown: river_like F1 37.9 (Pr 24.5) vs sea_like F1 80.1; reflections none 75.0 / moderate 69.1 / heavy 2.3 (n=10).
 - Conclusion: vs M0 eWaSR +20.5 F1, +17.1 mu. FP halved (1450 -> 653), but rivers and heavy reflections remain the weak spot: river precision is still only 24.5%. Longer training may help a little (dev mIoU still rising), but the river FP problem looks structural -> H2 (stereo filtering of reflections) and H3.
+
+## 2026-11-08 - M2: YOLO26s-seg trained on LaRS
+
+- What: `yolo26s-seg.pt` (COCO) fine-tuned 50 epochs on the converted LaRS (train minus dev, Ultralytics val = dev), imgsz 1024, batch 8, mosaic off, no vertical flip, rotation +-5 deg. best.pt chosen by Ultralytics on dev. Inference conf 0.25, retina masks, then instance -> semantic map (obstacles over sky over water). Run: `runs/m2_yolo26s_seg/` (38 min).
+- Why: instance-segmentation baseline for H1.
+- Dev (Ultralytics): mask mAP50 0.53, mAP50-95 0.30.
+- Unassigned pixels on val: mean 1.67%, max 22.1% of the image.
+- Result (lars_evaluator, val):
+
+| variant | F1 | mu | mIoU | Q | TP | FP | FN | Pr | Re |
+|---|---|---|---|---|---|---|---|---|---|
+| unassigned -> obstacle | 71.6 | 74.0 | 95.4 | 68.3 | 999 | 685 | 108 | 59.3 | 90.2 |
+| unassigned -> water | 73.2 | 74.4 | 95.4 | 69.8 | 861 | 386 | 246 | 69.0 | 77.8 |
+
+- The two variants trade FP for FN: unassigned pixels often sit around real obstacles, so mapping them to water removes about 300 FP and adds about 140 FN. For navigation the cautious variant is the relevant one.
+
+## 2026-11-08 - Summary M0-M2 (LaRS val, 198 images)
+
+| ID | model | train data | F1 | mu | mIoU | Q |
+|---|---|---|---|---|---|---|
+| M0 | eWaSR ResNet-18 (no IMU) | MaSTr1325 | 49.3 | 59.3 | 85.1 | 42.0 |
+| M1 | SegFormer-B2, 30 ep | LaRS train (-dev) | 69.8 | **76.4** | **96.7** | 67.5 |
+| M2 | YOLO26s-seg, 50 ep, unassigned -> obstacle | LaRS train (-dev) | 71.6 | 74.0 | 95.4 | 68.3 |
+| M2 | YOLO26s-seg, 50 ep, unassigned -> water | LaRS train (-dev) | **73.2** | 74.4 | 95.4 | **69.8** |
+
+Source: `results/results.csv` (evaluator output). F1 by scene type: M0 river 24.3 / sea 60.6, M1 river 37.9 / sea 80.1, M2 (obstacle) river 39.8 / sea 82.0.
+
+Paired bootstrap over frames (5000 resamples of the evaluator's per-frame TP/FP/FN and WE_acc), YOLO minus SegFormer:
+- F1: +1.8 (95% CI -4.1 to +6.8) for the cautious variant, +3.4 (CI -3.3 to +9.2) for the water variant -> **not significant**.
+- per-frame mu: -2.2 (CI -3.2 to -1.1) and -1.7 (CI -2.7 to -0.7) -> **SegFormer's water edge is significantly better**.
+
+Conclusions so far (H1):
+- Water-edge accuracy (mu) supports H1: the semantic model draws the water/obstacle boundary better (also mIoU 96.7 vs 95.4).
+- Obstacle F1 does **not** support H1 yet: YOLO is on par or slightly better, mostly through higher recall (90.2 vs 85.2). The F1 difference is within noise on 198 frames.
+- Not a fair final comparison yet: SegFormer had 30 epochs vs 160k iterations (~500 epochs) in the starter kit and its dev mIoU was still rising; YOLO used best-on-dev, SegFormer the last checkpoint. FPS (part of H1) is not measured yet.
+- All models fail on rivers compared to sea (precision 25-30% on rivers); heavy reflections remain unsolved (F1 < 10 for every model, n=10).
+
+Observed errors (`results/figures/comparison/`, gitignored, contains LaRS images):
+- Sun glitter (`inhouse_seq_155_00012`): eWaSR 32 FP around the glitter path, SegFormer 4, YOLO 2.
+- Brown jungle river (`yt055_02_00114`): eWaSR breaks down completely, both trained models are close to GT.
+- Reflections of trees on calm rivers (`inhouse_seq_244_*`): main remaining FP source, matches H2.
+
+Next: FPS for M0-M2 (batch 1, 50 warm-up + 200 timed iterations); longer SegFormer schedule; check whether a lower YOLO conf threshold changes the F1/mu balance (tune on dev, not val).
