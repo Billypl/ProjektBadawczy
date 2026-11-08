@@ -50,3 +50,16 @@ def test_keyhole_keeps_hole_empty():
 def test_class_mapping():
     assert LARS_TO_YOLO[1] == 0 and LARS_TO_YOLO[3] == 1 and LARS_TO_YOLO[5] == 2
     assert len(LARS_TO_YOLO) == 11
+
+
+def test_semantic_priority_and_unassigned_variants():
+    hw = (4, 4)
+    water = np.zeros(hw, bool); water[2:] = True
+    sky = np.zeros(hw, bool); sky[:2] = True; sky[0, 0] = False
+    boat = np.zeros(hw, bool); boat[2, 1] = True; boat[1, 1] = True   # overlaps sky and water
+    masks = {LARS_TO_YOLO[3]: water, LARS_TO_YOLO[5]: sky, LARS_TO_YOLO[11]: boat}
+    sem = semantic_from_class_masks(masks, hw)
+    assert sem[2, 1] == OBSTACLE and sem[1, 1] == OBSTACLE
+    assert sem[3, 3] == WATER and sem[1, 3] == SKY
+    assert sem[0, 0] == OBSTACLE                                         # unassigned, cautious
+    assert semantic_from_class_masks(masks, hw, unassigned=WATER)[0, 0] == WATER
