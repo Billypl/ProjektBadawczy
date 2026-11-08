@@ -1,0 +1,16 @@
+date,git_commit,exp_name,model,train_data,eval_split,input_res,F1,mu,mIoU,Q,fps,hardware,notes
+2026-11-08,7042163,m1_segformer_b2_dev,segformer_b2,LaRS train (-dev),dev,keep-ratio 2048x1024,67.24,78.19,97.53,65.58,,NVIDIA GeForce RTX 5070 Ti,last checkpoint (epoch 30)
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c025_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,73.37,79.38,97.09,71.24,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.25 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c025_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,80.12,79.26,97.28,77.94,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.25 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_last_c025_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,72.76,79.14,96.99,70.57,,NVIDIA GeForce RTX 5070 Ti,last.pt conf 0.25 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_last_c025_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,79.47,79.13,97.26,77.29,,NVIDIA GeForce RTX 5070 Ti,last.pt conf 0.25 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c005_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,73.53,79.46,97.3,71.54,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.05 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c005_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,83.56,79.44,97.44,81.41,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.05 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c010_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,73.76,79.39,97.11,71.63,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.10 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c010_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,83.57,79.39,97.41,81.41,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.10 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c015_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,73.74,79.41,97.1,71.6,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.15 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c015_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,83.22,79.33,97.38,81.04,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.15 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c035_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,73.0,79.38,97.08,70.87,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.35 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c035_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,76.59,79.18,97.16,74.42,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.35 unwater
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c050_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,71.66,79.2,97.05,69.54,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.50 unobst
+2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c050_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,67.86,78.99,97.0,65.83,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.50 unwater

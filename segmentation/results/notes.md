@@ -166,3 +166,69 @@ Observed errors (`results/figures/comparison/`, gitignored, contains LaRS images
 - Reflections of trees on calm rivers (`inhouse_seq_244_*`): main remaining FP source, matches H2.
 
 Next: FPS for M0-M2 (batch 1, 50 warm-up + 200 timed iterations); longer SegFormer schedule; check whether a lower YOLO conf threshold changes the F1/mu balance (tune on dev, not val).
+
+## 2026-11-08 - FPS, checkpoint selection, YOLO conf threshold
+
+### FPS (`usvseg/eval/fps.py`, `results/fps.csv`)
+
+- What: `Segmenter.segment()` end to end (RGB image in memory -> labels + confidence at the original resolution, incl. resize, normalisation, upsampling, host<->device), batch 1, 50 warm-up + 200 timed iterations with `torch.cuda.synchronize`, cycling through 20 val images (1920x1080 and 2208x1242). RTX 5070 Ti, bf16 for SegFormer, fp32 for eWaSR, Ultralytics default (fp32) for YOLO.
+- Why: H1 compares the models "at comparable FPS".
+
+| model | input | mean ms | p95 ms | FPS |
+|---|---|---|---|---|
+| M0 eWaSR | 512x384 | 27.1 | 30.7 | 36.9 |
+| M1 SegFormer-B2 | keep-ratio 2048x1024 | 70.4 | 73.3 | 14.2 |
+| M1 SegFormer-B2 | keep-ratio 1536x768 | 41.4 | 43.1 | 24.1 |
+| M1 SegFormer-B2 | keep-ratio 1024x512 | 21.4 | 23.8 | 46.8 |
+| M2 YOLO26s-seg | imgsz 1024, conf 0.25 | 28.0 | 36.1 | 35.7 |
+| M2 YOLO26s-seg | imgsz 1024, conf 0.10 | 36.0 | 52.3 | 27.8 |
+
+- Conclusion: at its default scale SegFormer is 2-2.5x slower than YOLO, so the M1 vs M2 comparison above was not at comparable FPS. YOLO time grows with the number of instances (lower conf -> more masks to upsample, larger p95). Pre/post-processing is not optimised in any wrapper (full-resolution softmax, CPU normalisation), so these are pipeline numbers, not model-only numbers. All of it is on a desktop GPU; on the boat the numbers will differ.
+
+### Checkpoint selection (`results/dev_selection.csv`)
+
+- What: one rule for both models: pick the checkpoint with the highest evaluator Q on dev.
+- SegFormer saves only the last checkpoint, but epoch 30 is also its best dev mIoU (monotonic rise, see `runs/m1_segformer_b2/metrics.csv`), so last = best. Dev: F1 67.2, mu 78.2, Q 65.6.
+- YOLO `best.pt` (epoch 48, chosen by Ultralytics mAP fitness) vs `last.pt` (epoch 50), conf 0.25, dev Q: 71.2 vs 70.6 (unassigned -> obstacle), 77.9 vs 77.3 (-> water).
+- Conclusion: keep `best.pt` for YOLO and the last checkpoint for SegFormer; the earlier val numbers stand. Note: dev was also Ultralytics' validation set, so YOLO's best.pt is mildly optimistic on dev (not on val).
+
+### YOLO confidence threshold (dev, `best.pt`)
+
+| conf | Q (-> obstacle) | Q (-> water) |
+|---|---|---|
+| 0.05 | 71.5 | 81.4 |
+| 0.10 | **71.6** | **81.4** |
+| 0.15 | 71.6 | 81.0 |
+| 0.25 | 71.2 | 77.9 |
+| 0.35 | 70.9 | 74.4 |
+| 0.50 | 69.5 | 65.8 |
+
+- Chosen: conf 0.10 for both variants (0.05 ties, the higher threshold gives fewer instances). A lower threshold mostly helps the water variant: more pixels get covered by some mask, so fewer obstacle pixels get "washed" into water.
+- Val (run once with the chosen setting): see the updated table below.
+
+### Updated H1 comparison (LaRS val, 198 images)
+
+| model | FPS | F1 | mu | mIoU | Q | Pr | Re |
+|---|---|---|---|---|---|---|---|
+| SegFormer-B2, scale 2048x1024 | 14.2 | 69.8 | 76.4 | 96.7 | 67.5 | 59.1 | 85.2 |
+| SegFormer-B2, scale 1536x768 | 24.1 | 70.1 | 74.7 | 96.9 | 67.9 | 61.8 | 80.9 |
+| SegFormer-B2, scale 1024x512 | 46.8 | 66.3 | 71.5 | 96.8 | 64.1 | 61.1 | 72.4 |
+| YOLO26s-seg conf 0.10, unassigned -> obstacle | 27.8 | 72.6 | 74.6 | 95.8 | 69.5 | 59.9 | 92.1 |
+| YOLO26s-seg conf 0.10, unassigned -> water | 27.8 | 78.1 | 75.0 | 95.7 | 74.7 | 70.3 | 87.8 |
+
+Source: `results/results.csv` and `results/fps.csv`. SegFormer's inference scale was not tuned; 1536x768 is simply the scale closest to YOLO's FPS.
+
+Paired bootstrap (`scripts/bootstrap_compare.py`, 5000 resamples, YOLO conf 0.10 minus SegFormer):
+
+| SegFormer scale | YOLO variant | F1 diff (95% CI) | mu diff (95% CI) |
+|---|---|---|---|
+| 2048x1024 (14 FPS) | -> obstacle | +2.8 (-3.2, +7.9) | -1.3 (-2.2, -0.4) |
+| 2048x1024 (14 FPS) | -> water | **+8.3 (+1.5, +14.0)** | -0.8 (-1.7, +0.1) |
+| 1536x768 (24 FPS, ~ YOLO) | -> obstacle | +2.4 (-3.5, +7.3) | +0.3 (-0.6, +1.2) |
+| 1536x768 (24 FPS, ~ YOLO) | -> water | **+8.0 (+1.3, +13.4)** | +0.8 (-0.1, +1.8) |
+
+Conclusions (H1, current state):
+- At comparable FPS, H1 is **not supported**: SegFormer is not better on F1 nor on mu. YOLO with unassigned -> water is significantly better on F1 (+8); the cautious YOLO variant is on par on both metrics.
+- SegFormer's mu advantage only exists at its full scale, where it runs at half of YOLO's FPS; tuning YOLO's threshold also shrank that gap from -2.2 to -1.3.
+- Caveats: SegFormer was trained 30 epochs (starter kit ~500) with dev mIoU still rising, and only YOLO had a threshold to tune. The unassigned -> water variant is optimistic: it turns "the model did not say anything here" into "safe water", which is risky for navigation.
+- Next: longer SegFormer training (the main open question for H1), then possibly a SegFormer trained/inferred at a smaller scale to match FPS properly.
