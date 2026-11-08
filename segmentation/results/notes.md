@@ -95,3 +95,22 @@ Checks on the actual files (2026-11-08):
   - Narrow jungle river with brown water (`yt055_02_00114`): water predicted as sky/obstacle, foliage partly as water. Pure domain gap, MaSTr has nothing like it.
 - Conclusion: the low F1 comes from false positives, not misses (recall 75.6). River scenes are much worse than sea (F1 24 vs 61), and F1 drops with reflection strength. This supports H3 (sea-trained model degrades on rivers) and motivates H2 (reflection/glitter FPs). Note the val set is small (79 river frames, 10 heavy-reflection frames), so subset numbers are noisy.
 - Caveat: `mu_frames` in `subsets.py` output is a mean of per-frame WE_acc and is not the global mu; only the global numbers go to the report.
+
+## 2026-11-08 - LaRS -> YOLO-seg conversion (for M2)
+
+- What: `scripts/convert_lars_yolo.py`. 11 YOLO classes: static_obstacle, water, sky as pseudo-instances (one per connected component) + 8 thing classes (one polygon per instance component; crowd segments kept). Output `data/yolo/lars/` (train / dev as YOLO val / LaRS val as test).
+- Why: YOLO format has no holes and no "stuff" classes; the loss of this conversion has to be known before comparing YOLO to semantic models (H1).
+- Ablation (150 random train images; % of non-ignore pixels whose semantic class changes after polygons -> mask, and per-thing IoU raster vs GT):
+
+| keyhole | eps (px) | changed mean | changed max | thing IoU mean | thing IoU min | things IoU<0.8 |
+|---|---|---|---|---|---|---|
+| no | 0 | 0.244% | 8.94% | 0.985 | 0.492 | 15/530 |
+| no | 1 | 0.304% | 8.98% | 0.966 | 0.488 | 16/530 |
+| yes | 0 | 0.000% | 0.00% | 1.000 | 0.999 | 0/530 |
+| yes | 1 | 0.066% | 0.30% | 0.979 | 0.838 | 0/530 |
+| yes | 2 | 0.136% | 0.60% | 0.956 | 0.737 | 5/530 |
+
+- Choice: keyhole + eps=1 px (contours with area < 100 px are not simplified, 1-px components become a pixel box).
+- Full conversion (`runs/checks/yolo/stats.csv`): train 2345 images / 31994 polygons, mean change 0.062% (max 0.41%), min thing IoU 0.81; val mean change 0.069%. Ultralytics loads all labels, 0 corrupt.
+- Conclusion: the conversion itself costs < 0.1% of pixels, so any YOLO vs SegFormer gap is from the model/representation, not the label format. Without keyhole, objects with holes (e.g. boats with see-through parts) lose up to half their mask.
+- YOLO training choices: mosaic off (2x2 mosaic puts sky below water), no vertical flip, rotation +-5 deg.
