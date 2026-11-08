@@ -30,5 +30,6 @@ class GroundTruthSegmenter:
         return [
             Instance(cls=seg["category_id"], mask=ids == seg["id"], score=1.0)
             for seg in ann["segments_info"]
-            if seg["category_id"] in LARS_THING_CLASSES
+            # crowd regions (groups of objects) stay obstacle pixels in labels, not instances
+            if seg["category_id"] in LARS_THING_CLASSES and not seg.get("iscrowd", 0)
         ]
