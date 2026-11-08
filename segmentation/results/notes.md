@@ -114,3 +114,12 @@ Checks on the actual files (2026-11-08):
 - Full conversion (`runs/checks/yolo/stats.csv`): train 2345 images / 31994 polygons, mean change 0.062% (max 0.41%), min thing IoU 0.81; val mean change 0.069%. Ultralytics loads all labels, 0 corrupt.
 - Conclusion: the conversion itself costs < 0.1% of pixels, so any YOLO vs SegFormer gap is from the model/representation, not the label format. Without keyhole, objects with holes (e.g. boats with see-through parts) lose up to half their mask.
 - YOLO training choices: mosaic off (2x2 mosaic puts sky below water), no vertical flip, rotation +-5 deg.
+
+## 2026-11-08 - M1: SegFormer-B2 trained on LaRS
+
+- What: HF `SegformerForSemanticSegmentation`, encoder `nvidia/mit-b2` (ImageNet-1k; NVIDIA Source Code License, research only). 30 epochs on LaRS train minus dev (2345 images), batch 8, crop 512x1024, keep-ratio scale (2048, 1024) x [0.5, 2.0], cat_max_ratio 0.75, hflip, colour jitter, rotation +-5 deg; AdamW lr 6e-5, head lr x10, poly with 879-iter warmup, bf16. Inference: whole image, keep-ratio (2048, 1024), last checkpoint. Run: `runs/m1_segformer_b2/` (config, metrics.csv, train.log).
+- Why: main semantic model for H1; hyperparameters taken from the MaCVi LaRS starter kit, schedule cut from 160k iterations to 30 epochs (8790 iterations).
+- Training: about 1.8 h on the RTX 5070 Ti (epochs 1-25 ~240 s, partly slowed by parallel CPU work; epochs 26-30 ~115 s). Dev mIoU 95.6 (ep 5) -> 97.2 (ep 20) -> 97.5 (ep 30), still slowly rising.
+- Result (lars_evaluator, val): **F1 69.8, mu 76.4, mIoU 96.7, Q 67.5**. TP 943, FP 653, FN 164 -> precision 59.1, recall 85.2. Close to the published SegFormer (MiT-B2) LaRS test numbers (70.0 / 78.6 / 96.8 / 67.8).
+- Breakdown: river_like F1 37.9 (Pr 24.5) vs sea_like F1 80.1; reflections none 75.0 / moderate 69.1 / heavy 2.3 (n=10).
+- Conclusion: vs M0 eWaSR +20.5 F1, +17.1 mu. FP halved (1450 -> 653), but rivers and heavy reflections remain the weak spot: river precision is still only 24.5%. Longer training may help a little (dev mIoU still rising), but the river FP problem looks structural -> H2 (stereo filtering of reflections) and H3.
