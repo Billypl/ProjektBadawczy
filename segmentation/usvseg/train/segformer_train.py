@@ -2,8 +2,12 @@
 
     python -m usvseg.train.segformer_train --config configs/m1_segformer_b2.yaml
     python -m usvseg.train.segformer_train --config configs/m1_segformer_b2.yaml --smoke
+    python -m usvseg.train.segformer_train --config configs/m1_segformer_b2.yaml --resume
 
-Outputs in runs/<exp>/: config.yaml, metrics.csv, checkpoint/ (last epoch, HF format).
+Outputs in runs/<exp>/: config.yaml, metrics.csv, checkpoint/ (last epoch, HF format),
+checkpoint_best/ (best dev mIoU so far), state.pt (model + optimizer + scheduler + RNG
+after the last finished epoch). Stop the run at any time (kill / Ctrl-C) and restart
+with --resume: it continues from the last finished epoch, so at most one epoch is lost.
 Dev mIoU is logged for monitoring only; reported numbers come from lars_evaluator on val.
 """
 
@@ -95,6 +99,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=Path, required=True)
     ap.add_argument("--smoke", action="store_true", help="20 images, 1 epoch, separate exp dir")
+    ap.add_argument("--resume", action="store_true", help="continue from runs/<exp>/state.pt")
     args = ap.parse_args()
     cfg = yaml.safe_load(args.config.read_text())
 
@@ -103,6 +108,11 @@ def main() -> None:
         cfg.update(epochs=1, limit=20, dev_limit=5, eval_every=1)
     out = REPO / "runs" / exp
     out.mkdir(parents=True, exist_ok=True)
+    if args.resume:
+        if yaml.safe_load((out / "config.yaml").read_text()) != cfg:
+            raise SystemExit(f"config differs from {out / 'config.yaml'}, refusing to resume")
+    elif (out / "state.pt").exists():
+        raise SystemExit(f"{out / 'state.pt'} exists: use --resume or remove the run dir")
     (out / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
 
     seed_everything(cfg["seed"])
@@ -119,10 +129,11 @@ def main() -> None:
     transform = TrainTransform(base_scale=aug["base_scale"], ratio_range=aug["ratio_range"],
                                crop_hw=aug["crop_hw"], cat_max_ratio=aug["cat_max_ratio"],
                                rotate_deg=aug["rotate_deg"], color_jitter=aug["color_jitter"])
+    # not persistent: workers are re-created each epoch, so their seeds come from the
+    # generator state, which is saved in state.pt and makes a resumed run identical
+    gen = torch.Generator().manual_seed(cfg["seed"])
     loader = DataLoader(SegDataset(train, transform), batch_size=cfg["batch_size"], shuffle=True,
-                        num_workers=cfg["num_workers"], drop_last=True, pin_memory=True,
-                        persistent_workers=cfg["num_workers"] > 0,
-                        generator=torch.Generator().manual_seed(cfg["seed"]))
+                        num_workers=cfg["num_workers"], drop_last=True, pin_memory=True, generator=gen)
 
     model = build_segformer(cfg["encoder"]).to(device).train()
     opt = cfg["optim"]
@@ -134,13 +145,24 @@ def main() -> None:
 
     print(f"exp={exp} train={len(train)} dev={len(dev)} iters/epoch={len(loader)} total={total} warmup={warmup}",
           flush=True)
-    metrics = open(out / "metrics.csv", "w", newline="")
-    log = csv.writer(metrics, lineterminator="\n")
-    log.writerow(["epoch", "iter", "loss", "lr", "dev_mIoU", "dev_IoU_obstacle", "dev_IoU_water", "dev_IoU_sky",
-                  "epoch_time_s"])
+    it, start_epoch, best_miou = 0, 1, -1.0
+    if args.resume:
+        st = torch.load(out / "state.pt", map_location="cpu", weights_only=False)
+        model.load_state_dict(st["model"])
+        optimizer.load_state_dict(st["optimizer"])
+        sched.load_state_dict(st["scheduler"])
+        gen.set_state(st["loader_gen"])
+        torch.set_rng_state(st["torch_rng"])
+        it, start_epoch, best_miou = st["iter"], st["epoch"] + 1, st["best_miou"]
+        print(f"resumed after epoch {st['epoch']} (iter {it}, best dev mIoU {best_miou})", flush=True)
 
-    it = 0
-    for epoch in range(1, cfg["epochs"] + 1):
+    metrics = open(out / "metrics.csv", "a" if args.resume else "w", newline="")
+    log = csv.writer(metrics, lineterminator="\n")
+    if not args.resume:
+        log.writerow(["epoch", "iter", "loss", "lr", "dev_mIoU", "dev_IoU_obstacle", "dev_IoU_water", "dev_IoU_sky",
+                      "epoch_time_s"])
+
+    for epoch in range(start_epoch, cfg["epochs"] + 1):
         t0, losses = time.time(), []
         for x, y in loader:
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
@@ -162,11 +184,20 @@ def main() -> None:
         if epoch % cfg["eval_every"] == 0 or epoch == cfg["epochs"]:
             miou, ious = dev_miou(model, dev, cfg["infer_scale"], device)
             row[4:8] = [round(miou, 2)] + [round(v, 2) for v in ious]
+            if miou > best_miou:
+                best_miou = miou
+                model.save_pretrained(out / "checkpoint_best")
         row.append(round(time.time() - t0, 1))
         log.writerow(row)
         metrics.flush()
         print(f"== epoch {epoch} loss {row[2]} dev_mIoU {row[4]} ({row[-1]} s)", flush=True)
         model.save_pretrained(out / "checkpoint")
+        tmp = out / "state.pt.tmp"  # write then rename, so a kill during the save cannot corrupt it
+        torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+                    "scheduler": sched.state_dict(), "loader_gen": gen.get_state(),
+                    "torch_rng": torch.get_rng_state(), "epoch": epoch, "iter": it,
+                    "best_miou": best_miou}, tmp)
+        tmp.replace(out / "state.pt")
 
     metrics.close()
     print(f"done, checkpoint -> {out / 'checkpoint'}", flush=True)
