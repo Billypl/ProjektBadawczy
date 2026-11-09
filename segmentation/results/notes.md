@@ -232,3 +232,26 @@ Conclusions (H1, current state):
 - SegFormer's mu advantage only exists at its full scale, where it runs at half of YOLO's FPS; tuning YOLO's threshold also shrank that gap from -2.2 to -1.3.
 - Caveats: SegFormer was trained 30 epochs (starter kit ~500) with dev mIoU still rising, and only YOLO had a threshold to tune. The unassigned -> water variant is optimistic: it turns "the model did not say anything here" into "safe water", which is risky for navigation.
 - Next: longer SegFormer training (the main open question for H1), then possibly a SegFormer trained/inferred at a smaller scale to match FPS properly.
+
+## 2026-11-09 - River error analysis (for H3)
+
+- What: `scripts/river_analysis.py` -> `results/river_analysis.md`. Breakdown river_like vs sea_like on LaRS val for M0 eWaSR, M1 SegFormer-B2 (30 ep, full scale) and M2 YOLO26s-seg (conf 0.10, unassigned -> obstacle), from the evaluator's frames.csv and segments.json plus LaRS scene attributes. 10 overlays of the worst river frames in `results/figures/rivers/` (gitignored).
+- Why: all models had river precision of only 14-26%; H3 needs to know whether this is "the model is worse on rivers" or something else.
+- Data mix: LaRS train (minus dev) is 77% sea / 23% river (1815 / 529); val is 60 / 40 (119 / 79). MaSTr1325 inside LaRS train is all sea.
+- Results:
+  - **Rivers have few real obstacles.** River frames contain 149 GT obstacles (1.9 per frame), sea frames 958 (8.1 per frame). Recall on rivers is fine (84-95%, YOLO 94.6%); the low F1 comes from precision.
+  - **FP per frame is about 2x higher on rivers** for both trained models (SegFormer 4.9 vs 2.2, YOLO 5.2 vs 2.3; eWaSR 9.8 vs 5.7). Combined with 4x fewer real obstacles this collapses precision.
+  - **Still water and heavy reflections:** 21 still-water river frames contain only 3 GT obstacles in total, so F1 there (1-3) is meaningless; FP/frame (4.4-9.6) is the metric to watch. The "heavy reflections" subset (n=10) has the same problem. Previous notes reading "F1 < 10 on heavy reflections" overstate it: it is a handful of FP on frames with almost nothing to detect.
+  - FP segments are mostly small (<100 px: 61-67% for the trained models on rivers), but rivers have more large ones for eWaSR (>10k px: 10% vs 3%).
+  - Location of false obstacle pixels (own diagnostic: predicted obstacle on GT water, by distance to the nearest non-water GT pixel): SegFormer on rivers has 37% within 10 px of the shore (edge noise) but **31.5% more than 150 px away** (vs 7% on sea), i.e. blobs in open water: reflections and glitter. YOLO on rivers is more spread (40% near shore, 15% far).
+  - FN: on rivers almost nothing is missed (YOLO 8 FN of 149). On sea the hard classes are animals (57-96% missed), buoys (18-45%) and "other".
+- Observed error types (worst river frames):
+  - Mirror reflections of trees on still ponds (`yt098_02_*`): SegFormer produces many small FP blobs on the reflections, eWaSR labels most of the reflection as obstacle, YOLO is almost clean.
+  - Sun glitter against the light (`yt099_19_*`, fjord labelled river_like): FP on glitter and on dark water in the mountain's shadow.
+  - Dark rippled water in an overexposed scene under a bridge (`mit_seq_08_00219`): YOLO 85 FP of small patches on high-contrast ripples, SegFormer 2.
+  - Shore line of narrow rivers (`davimar_seq_70_00039`): small FP along the water/bank boundary.
+  - Own boat parts at the bottom of the image are sometimes annotated as water in GT (`yt099_19_00029`), so a correct "obstacle" prediction there counts as FP. Not quantified.
+- Conclusions:
+  - H3 in its plain form ("model trained mostly on sea loses on rivers") is supported by FP/frame (2x), but the F1/precision gap overstates it, because river scenes have far fewer obstacles. For H3 report FP/frame (or FP per km/minute on own recordings) alongside F1.
+  - The river FP split into two groups with different fixes: edge noise near the shore (post-processing, minimum blob size, temporal filtering) and blobs far out in open water from reflections and glitter (exactly H2: a stereo point on a reflection lies below the water plane).
+  - Neither model type is uniformly better on rivers: SegFormer is cleaner on bright/overexposed scenes, YOLO on mirror reflections.
