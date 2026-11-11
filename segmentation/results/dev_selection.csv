@@ -14,3 +14,4 @@ date,git_commit,exp_name,model,train_data,eval_split,input_res,F1,mu,mIoU,Q,fps,
 2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c035_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,76.59,79.18,97.16,74.42,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.35 unwater
 2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c050_unobst,yolo26s_seg,LaRS train (-dev),dev,1024,71.66,79.2,97.05,69.54,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.50 unobst
 2026-11-08,7042163-dirty,m2_yolo26s_dev_best_c050_unwater,yolo26s_seg,LaRS train (-dev),dev,1024,67.86,78.99,97.0,65.83,,NVIDIA GeForce RTX 5070 Ti,best.pt conf 0.50 unwater
+2026-11-12,4fe228a,m1_segformer_b2_e80_dev,segformer_b2,LaRS train (-dev),dev,keep-ratio 2048x1024,73.16,79.53,97.87,71.6,,NVIDIA GeForce RTX 5070 Ti,"80 epochs, last = best dev mIoU (epoch 80)"

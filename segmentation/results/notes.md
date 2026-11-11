@@ -255,3 +255,40 @@ Conclusions (H1, current state):
   - H3 in its plain form ("model trained mostly on sea loses on rivers") is supported by FP/frame (2x), but the F1/precision gap overstates it, because river scenes have far fewer obstacles. For H3 report FP/frame (or FP per km/minute on own recordings) alongside F1.
   - The river FP split into two groups with different fixes: edge noise near the shore (post-processing, minimum blob size, temporal filtering) and blobs far out in open water from reflections and glitter (exactly H2: a stereo point on a reflection lies below the water plane).
   - Neither model type is uniformly better on rivers: SegFormer is cleaner on bright/overexposed scenes, YOLO on mirror reflections.
+
+## 2026-11-12 - M1 SegFormer-B2, 80 epochs
+
+- What: same setup as M1 (`configs/m1_segformer_b2_e80.yaml`), 80 epochs instead of 30 (23440 iterations; warmup 1500 iterations, since total/10 no longer caps it). Run `runs/m1_segformer_b2_e80/`, interrupted and resumed twice (after epochs 4 and 21) with `--resume`. About 3.5 h of training in total.
+- Why: dev mIoU of the 30-epoch run was still rising; H1 needed a fairer SegFormer.
+- Training: dev mIoU 94.5 (ep 5) -> 97.2 (ep 25) -> 97.5 (ep 35) -> 97.6 (ep 50-65) -> 97.87 (ep 80). Last epoch = best dev mIoU, so `checkpoint/` and `checkpoint_best/` are the same model.
+- Dev (evaluator): F1 73.2, mu 79.5, Q 71.6 (30 epochs: 67.2 / 78.2 / 65.6).
+- Val (evaluator, `results/results.csv`):
+
+| model | scale | FPS | F1 | mu | mIoU | Q | Pr | Re |
+|---|---|---|---|---|---|---|---|---|
+| SegFormer-B2 30 ep | 2048x1024 | 14.2 | 69.8 | 76.4 | 96.7 | 67.5 | 59.1 | 85.2 |
+| SegFormer-B2 80 ep | 2048x1024 | 14.2 | 71.6 | **77.4** | 97.1 | 69.5 | 61.2 | 86.1 |
+| SegFormer-B2 80 ep | 1536x768 | 24.1 | 72.4 | 75.7 | **97.2** | 70.4 | 64.0 | 83.4 |
+| YOLO26s-seg conf 0.10, -> obstacle | 1024 | 27.8 | 72.6 | 74.6 | 95.8 | 69.5 | 59.9 | 92.1 |
+| YOLO26s-seg conf 0.10, -> water | 1024 | 27.8 | **78.1** | 75.0 | 95.7 | **74.7** | 70.3 | 87.8 |
+
+FPS is taken from the 30-epoch measurements (`results/fps.csv`): same architecture and inference code, so the speed does not change.
+
+- 80 vs 30 epochs (full scale, paired bootstrap): F1 +1.8 (CI -1.0, +4.9, within noise), mu +0.9 (CI +0.5, +1.3, significant).
+- Rivers (full scale): F1 41.2 (30 ep: 37.9), FP 356 (30 ep: 386); sea F1 81.1 (80.1).
+
+Paired bootstrap, YOLO conf 0.10 minus SegFormer 80 ep:
+
+| SegFormer scale | YOLO variant | F1 diff (95% CI) | mu diff (95% CI) |
+|---|---|---|---|
+| 2048x1024 (14 FPS) | -> obstacle | +1.0 (-5.0, +6.2) | **-2.2 (-3.1, -1.3)** |
+| 2048x1024 (14 FPS) | -> water | +6.5 (-0.3, +12.3) | **-1.7 (-2.6, -0.8)** |
+| 1536x768 (24 FPS, ~ YOLO) | -> obstacle | +0.1 (-5.5, +4.5) | -0.6 (-1.5, +0.3) |
+| 1536x768 (24 FPS, ~ YOLO) | -> water | +5.7 (-0.7, +10.5) | -0.1 (-1.0, +0.9) |
+
+Conclusions (H1, current state):
+- Longer training helped SegFormer a little (mu significantly, F1 within noise) and removed YOLO's significant F1 lead; the remaining F1 gap of the optimistic YOLO variant (+5.7 to +6.5) is borderline (CI just touches 0).
+- At comparable FPS (~24-28) **neither model is significantly better on F1 or mu**. H1 is not supported, but not refuted either: the difference is below what 198 val frames can resolve.
+- SegFormer's water-edge advantage (mu +1.7 to +2.2, significant) exists only at full scale, i.e. at about half of YOLO's FPS.
+- Practical takeaway for the boat: model choice matters less than expected; YOLO gives instances for free (useful for tracking and for the stereo part), SegFormer gives a slightly better water edge. Decision should depend on the target hardware FPS and on how the stereo part uses the output.
+- To resolve the F1 question, more evaluation frames are needed (LaRS test via the MaCVi server, or own annotated recordings), not more training.
