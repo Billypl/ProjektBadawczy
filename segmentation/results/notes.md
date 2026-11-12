@@ -302,3 +302,20 @@ Conclusions (H1, current state):
   - **Ablations and comparisons (H2, H3, data mixes, variants): 30 epochs**, same schedule for all compared variants. Relative differences are what matters there.
   - **Final model (deployment, final report table, comparison with YOLO trained to its plateau): 80 epochs.**
   - Do not go towards the starter kit's ~500 epochs: expected gain is tenths of a point. The current bottleneck is the size of the evaluation set (198 val frames cannot resolve ~2 F1 points) and river data, not training length.
+
+## 2026-11-12 - Pohang stereo: segmentation + water plane (H2 prototype)
+
+- What: Pohang Canal Dataset sequence `pohang00_pier` (harbour/pier, 300 stereo pairs 2048x1080; access via the stereo team's registration, data only in `data/`). Every 10th frame (30 frames).
+  - Depth: the stereo team's `stereo/stereo_depth.py` from `origin/stereo`, unchanged, called through `scripts/pohang_stereo_depth.py` (own venv `.venv-stereo` with OpenCV contrib, which conflicts with the headless OpenCV of the main venv).
+  - `scripts/pohang_h2.py`: SegFormer-B2 80 ep on the rectified left image -> back-project valid depth (< 40 m) -> RANSAC plane on WATER pixels (inliers 0.2 m, normal within 30 deg of camera up) -> obstacle components with >= 50 valid depth pixels flagged when most of their points are > 0.5 m below the plane. Per-frame CSV in `runs/h2_pohang*/frames.csv`, overlays in `results/figures/h2_pohang*/` (gitignored).
+- Why: first data outside LaRS (canal/harbour, H3) and first test of the H2 idea on real stereo.
+- Results:
+  - Segmentation looks clean on this sequence (calm harbour, no visible reflection FP). No ground truth exists, so this is visual only.
+  - **Water plane is stable**: camera height above water 2.3-3.0 m across all 30 frames, 60-95% of water depth points are inliers. The plane fit itself works.
+  - **Stereo covers little water**: only 2-8% of water pixels have valid depth (smooth water has no texture; WLS confidence > 50 removes most of it). Enough for a plane, not for per-pixel decisions on water.
+  - **Few obstacles can be checked**: most obstacle components have < 50 valid depth pixels within 40 m; typically only the large shore component is checked.
+  - **The only 2 flagged components (frames 000363, 000393) are false flags**: a real floating pontoon at the bottom-right edge. Stereo gives it ~20 m (disparity ~80 px) while the water plane says ~10 m at its waterline row. The same with `num_disparities=512`, so it is not the search range. Likely a systematic stereo error near the image edge, possibly from the assumed calibration conventions in `stereo_depth.py` (quaternion order, camera-to-world direction are marked as "assumed").
+- Conclusions:
+  - H2 has a dangerous failure mode: any stereo error that makes a low image point too far looks exactly like a reflection (below the water plane) and would delete a real obstacle. A filter must only remove obstacles when stereo is trustworthy there (confidence, not near image edges, consistent with the waterline), and should lean towards keeping obstacles.
+  - This sequence has no reflection false positives to remove, so it cannot show a benefit of H2. Better test data: river/canal sequences with strong reflections (LaRS has no stereo; other Pohang sequences or own recordings).
+  - For the stereo team: check the rectification at the image edges (row alignment of matched features, a known object distance), and consider returning arrays from `compute_depth` instead of only files.

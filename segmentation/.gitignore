@@ -1,4 +1,5 @@
 .venv/
+.venv-stereo/
 data/
 runs/
 third_party/
@@ -12,3 +13,4 @@ __pycache__/
 # contain LaRS images, do not redistribute via git
 results/figures/comparison/
 results/figures/rivers/
+results/figures/h2_pohang*/
