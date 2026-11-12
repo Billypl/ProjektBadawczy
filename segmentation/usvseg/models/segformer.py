@@ -13,6 +13,7 @@ from transformers import SegformerForSemanticSegmentation
 
 from common.interfaces import IGNORE, Segmentation, StereoFrame
 from usvseg.data.taxonomy import SEMANTIC_CLASSES
+from usvseg.postprocess import BlobFilter, remove_small_blobs
 from usvseg.train.transforms import keep_ratio_scale, normalize, resize_pair
 
 
@@ -27,14 +28,19 @@ def build_segformer(encoder: str = "nvidia/mit-b2") -> SegformerForSemanticSegme
 
 
 class SegformerSegmenter:
-    """Keep-ratio resize to `scale`, whole-image inference, logits upsampled to the original size."""
+    """Keep-ratio resize to `scale`, whole-image inference, logits upsampled to the original size.
+
+    blob_filter (off by default): small obstacle blobs on water are relabelled to water,
+    see usvseg.postprocess.
+    """
 
     def __init__(self, checkpoint: Path, scale: tuple[int, int] = (2048, 1024), device: str = "cuda",
-                 amp: bool = True):
+                 amp: bool = True, blob_filter: BlobFilter | None = None):
         self.model = SegformerForSemanticSegmentation.from_pretrained(checkpoint).eval().to(device)
         self.scale = tuple(scale)
         self.device = torch.device(device)
         self.amp = amp
+        self.blob_filter = blob_filter
 
     @torch.no_grad()
     def predict(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -45,7 +51,10 @@ class SegformerSegmenter:
             logits = self.model(pixel_values=x).logits
         logits = F.interpolate(logits.float(), size=(h, w), mode="bilinear", align_corners=False)
         conf, labels = logits.softmax(1)[0].max(0)
-        return labels.byte().cpu().numpy(), conf.cpu().numpy()
+        labels = labels.byte().cpu().numpy()
+        if self.blob_filter is not None:
+            labels = remove_small_blobs(labels, self.blob_filter)
+        return labels, conf.cpu().numpy()
 
     def segment(self, frame: StereoFrame) -> Segmentation:
         labels, conf = self.predict(frame.left)

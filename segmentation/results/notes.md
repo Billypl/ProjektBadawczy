@@ -319,3 +319,28 @@ Conclusions (H1, current state):
   - H2 has a dangerous failure mode: any stereo error that makes a low image point too far looks exactly like a reflection (below the water plane) and would delete a real obstacle. A filter must only remove obstacles when stereo is trustworthy there (confidence, not near image edges, consistent with the waterline), and should lean towards keeping obstacles.
   - This sequence has no reflection false positives to remove, so it cannot show a benefit of H2. Better test data: river/canal sequences with strong reflections (LaRS has no stereo; other Pohang sequences or own recordings).
   - For the stereo team: check the rectification at the image edges (row alignment of matched features, a known object distance), and consider returning arrays from `compute_depth` instead of only files.
+
+## 2026-11-12 - Small-blob post-processing (toggle, off by default)
+
+- What: `usvseg/postprocess.py` `remove_small_blobs`: OBSTACLE components with area < `max_area` px whose 1-px border is mostly water are relabelled to WATER; `shore_dist > 0` restricts it to blobs within that distance of a large obstacle region. Toggle: `SegformerSegmenter(blob_filter=BlobFilter(...))`, `predict_segformer.py --pp-max-area N --pp-shore-dist D`, `fps.py --pp-max-area`. Tuned with `scripts/postprocess_sweep.py` on the existing dev PNGs (no re-inference), grid max_area {50, 100, 200, 500, 1000} x shore_dist {0, 10, 25}, rows in `results/dev_selection.csv`. The same filter applied to YOLO PNGs for a fair H1 comparison.
+- Why: river analysis showed 37% of SegFormer FP pixels within 10 px of the shore; idea was to remove small blobs there.
+- Dev result:
+  - **Shore-only variants barely help** (d10: SegFormer F1 +0.1 to +0.5, YOLO +0.0). The near-shore FP pixels are mostly attached to the shore component, so they are not separate blobs; a blob filter cannot reach them.
+  - **Removing tiny blobs anywhere helps SegFormer**: a50_d0 F1 73.16 -> 76.45 (best), a100_d0 76.05; mu and mIoU unchanged. Larger thresholds (>= 500 px) hurt (real small obstacles get removed). YOLO best also a50_d0, but only +0.5.
+  - Chosen on dev: **max_area 50, shore_dist 0** for both models.
+- Val result (single evaluation of the chosen setting, `results/results.csv`), paired bootstrap vs unfiltered:
+
+| model | F1 before -> after | F1 diff (95% CI) | TP / FP / FN before -> after |
+|---|---|---|---|
+| SegFormer 80 ep 2048x1024 | 71.57 -> 76.83 | **+5.2 (+3.2, +7.5)** | 953/603/154 -> 932/387/175 |
+| SegFormer 80 ep 1536x768 | 72.42 -> 75.22 | **+2.8 (+1.7, +4.0)** | |
+| YOLO conf 0.10 -> obstacle | 72.57 -> 75.34 | **+2.7 (+1.2, +4.9)** | 1020/684/87 -> 1008/561/99 |
+| YOLO conf 0.10 -> water | 78.07 -> 79.76 | +1.7 (-0.3, +4.6) | |
+
+  mu and mIoU change by < 0.05 (the filter only touches tiny areas).
+- H1 with the filter on both (YOLO - SegFormer): vs SegFormer 2048: F1 -1.5 / +2.9 (within noise), mu -2.2 / -1.7 (significant, SegFormer better). vs SegFormer 1536 (comparable FPS): F1 +0.1 (noise) for YOLO -> obstacle, **+4.5 (+0.7, +8.0) significant** for YOLO -> water; mu within noise.
+- Cost: the filter itself takes ~3 ms per frame on CPU (2208x1242 label map, 20 val frames, ad-hoc timing). An end-to-end FPS run was attempted but discarded: the GPU was 87% busy with a process outside WSL, the row was removed from `results/fps.csv`. Re-measure on an idle GPU.
+- Conclusions:
+  - Cheap, model-agnostic gain in F1, mostly by removing FP (SegFormer -216 FP) at the price of some missed small obstacles (SegFormer +21 FN, YOLO +12 FN). For a boat a missed obstacle is worse than a false alarm, so keep it a toggle; a tracker over time would be a safer place to drop one-frame blobs.
+  - Gains more for SegFormer (it produces more speckle FP), so it narrows the F1 gap at full scale; at comparable FPS the optimistic YOLO variant is now significantly better on F1. H1 stays not supported.
+  - The original idea (shore FP) needs a different tool: the FP pixels sit on the shore boundary, i.e. it is a boundary-accuracy problem, not a blob problem.

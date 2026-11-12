@@ -38,8 +38,10 @@ def build(model: str, weights: Path | None, args):
         return EwasrSegmenter(weights or DEFAULT_WEIGHTS), "512x384"
     if model == "segformer":
         from usvseg.models.segformer import SegformerSegmenter
+        from usvseg.postprocess import BlobFilter
         scale = tuple(int(v) for v in args.scale.split("x"))
-        return SegformerSegmenter(weights, scale=scale), f"keep-ratio {args.scale}"
+        bf = BlobFilter(args.pp_max_area, args.pp_shore_dist) if args.pp_max_area > 0 else None
+        return SegformerSegmenter(weights, scale=scale, blob_filter=bf), f"keep-ratio {args.scale}"
     if model == "yolo":
         from usvseg.models.yolo_seg import YoloSegmenter
         return YoloSegmenter(weights, imgsz=args.imgsz, conf=args.conf), f"imgsz {args.imgsz}"
@@ -53,6 +55,8 @@ def main() -> None:
     ap.add_argument("--scale", default="2048x1024")
     ap.add_argument("--imgsz", type=int, default=1024)
     ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--pp-max-area", type=int, default=0, help="segformer: > 0 enables the small-blob filter")
+    ap.add_argument("--pp-shore-dist", type=int, default=10)
     ap.add_argument("--images", type=int, default=20)
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--iters", type=int, default=200)

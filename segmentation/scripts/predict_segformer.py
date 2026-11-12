@@ -13,6 +13,7 @@ from tqdm import tqdm
 from usvseg.data.lars import DEFAULT_ROOT, Lars
 from usvseg.eval.export_lars import save_prediction
 from usvseg.models.segformer import SegformerSegmenter
+from usvseg.postprocess import BlobFilter
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -24,6 +25,9 @@ def main() -> None:
     ap.add_argument("--split", default="val")
     ap.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     ap.add_argument("--scale", default="2048x1024", help="keep-ratio inference scale, long x short side")
+    ap.add_argument("--pp-max-area", type=int, default=0,
+                    help="> 0 enables the small-blob filter (usvseg.postprocess), off by default")
+    ap.add_argument("--pp-shore-dist", type=int, default=10, help="0 = remove small blobs anywhere on water")
     ap.add_argument("--limit", type=int, default=0, help="smoke mode: only first N images")
     args = ap.parse_args()
 
@@ -36,7 +40,8 @@ def main() -> None:
 
     ds = Lars(args.split, args.root)
     samples = ds.samples[: args.limit] if args.limit else ds.samples
-    seg = SegformerSegmenter(args.checkpoint, scale=scale)
+    blob_filter = BlobFilter(args.pp_max_area, args.pp_shore_dist) if args.pp_max_area > 0 else None
+    seg = SegformerSegmenter(args.checkpoint, scale=scale, blob_filter=blob_filter)
     for s in tqdm(samples, desc="SegFormer"):
         img = s.image()
         labels, _ = seg.predict(img)
