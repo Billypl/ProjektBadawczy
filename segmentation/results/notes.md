@@ -292,3 +292,13 @@ Conclusions (H1, current state):
 - SegFormer's water-edge advantage (mu +1.7 to +2.2, significant) exists only at full scale, i.e. at about half of YOLO's FPS.
 - Practical takeaway for the boat: model choice matters less than expected; YOLO gives instances for free (useful for tracking and for the stereo part), SegFormer gives a slightly better water edge. Decision should depend on the target hardware FPS and on how the stereo part uses the output.
 - To resolve the F1 question, more evaluation frames are needed (LaRS test via the MaCVi server, or own annotated recordings), not more training.
+
+## 2026-11-12 - Training length rule
+
+- What: decision on SegFormer schedule length for future runs, based on the 30 vs 80 epoch comparison above.
+- Why: 80 epochs cost ~2.5x the compute (~3.5-4 h vs ~1.8 h) for +0.9 mu (significant) and +1.8 F1 (within noise) on val.
+- Evidence: the 80-epoch run reached the 30-epoch final dev mIoU (97.5) by epoch 35 and plateaued at 97.6 between epochs 50 and 65; the last gain to 97.87 came while the poly schedule annealed lr to 0. The 30-epoch run anneals to 0 as well, so it ends converged, only slightly lower.
+- Rule:
+  - **Ablations and comparisons (H2, H3, data mixes, variants): 30 epochs**, same schedule for all compared variants. Relative differences are what matters there.
+  - **Final model (deployment, final report table, comparison with YOLO trained to its plateau): 80 epochs.**
+  - Do not go towards the starter kit's ~500 epochs: expected gain is tenths of a point. The current bottleneck is the size of the evaluation set (198 val frames cannot resolve ~2 F1 points) and river data, not training length.
