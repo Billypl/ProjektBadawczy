@@ -1,0 +1,25 @@
+# M1: SegFormer-B2 on LaRS train (minus dev). Hyperparameters from the MaCVi
+# starter kit (mmsegmentation-macvi, segformer_mit-b0_8x1_1024x1024_160k_lars.py
+# + _base_/datasets/lars.py), schedule shortened to 30 epochs.
+exp: m1_segformer_b2
+seed: 42
+encoder: nvidia/mit-b2
+epochs: 30
+batch_size: 8
+num_workers: 12
+eval_every: 5
+infer_scale: [2048, 1024]   # keep-ratio: long side <= 2048, short side <= 1024
+
+augment:
+  base_scale: [2048, 1024]
+  ratio_range: [0.5, 2.0]
+  crop_hw: [512, 1024]
+  cat_max_ratio: 0.75
+  rotate_deg: 5.0           # boat roll
+  color_jitter: [0.3, 0.3, 0.3, 0.05]   # brightness, contrast, saturation, hue
+
+optim:
+  lr: 6.0e-5
+  weight_decay: 0.01
+  head_lr_mult: 10.0
+  warmup_iters: 1500

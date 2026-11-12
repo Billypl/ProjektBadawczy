@@ -1,0 +1,29 @@
+[project]
+name = "usvseg"
+version = "0.1.0"
+description = "USV water/obstacle segmentation on LaRS (ZPB, PG)"
+requires-python = ">=3.12"
+# torch/torchvision come from the cu128 index:
+#   pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+dependencies = [
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "numpy==2.5.4",
+    "opencv-python-headless==5.0.0.93",
+    "pillow==13.0.0",
+    "pyyaml==6.0.3",
+    "pandas==3.1.1",
+    "matplotlib==3.11.2",
+    "tqdm==4.70.1",
+    "transformers==5.22.2",
+    "ultralytics==8.4.207",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[tool.setuptools.packages.find]
+include = ["usvseg*", "common*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

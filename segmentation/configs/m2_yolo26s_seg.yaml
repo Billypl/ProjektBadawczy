@@ -1,0 +1,19 @@
+# M2: YOLO26s-seg on LaRS converted with scripts/convert_lars_yolo.py
+# (train = LaRS train minus dev, val = dev; LaRS val is only used for reporting).
+exp: m2_yolo26s_seg
+weights: yolo26s-seg.pt   # COCO-pretrained
+data: data/yolo/lars/data.yaml
+seed: 42
+epochs: 50
+imgsz: 1024
+batch: 8
+workers: 12
+
+# Ultralytics augmentation overrides
+augment:
+  mosaic: 0.0      # a 2x2 mosaic puts sky below water, breaking the sky-on-top prior
+  flipud: 0.0      # no vertical flip
+  fliplr: 0.5
+  degrees: 5.0     # boat roll
+  scale: 0.5
+  translate: 0.1

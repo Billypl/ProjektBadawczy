@@ -1,0 +1,11 @@
+date,git_commit,exp_name,model,train_data,eval_split,input_res,F1,mu,mIoU,Q,fps,hardware,notes
+2026-11-08,5a3294b,m0_ewasr_val,ewasr_resnet18,MaSTr1325,val,512x384,49.32,59.27,85.06,41.95,,NVIDIA GeForce RTX 5070 Ti,"pretrained weights, no IMU, no training"
+2026-11-08,d642d06,m1_segformer_b2_val,segformer_b2,LaRS train (-dev),val,keep-ratio 2048x1024,69.77,76.4,96.68,67.46,,NVIDIA GeForce RTX 5070 Ti,"30 epochs, crop 512x1024, last checkpoint"
+2026-11-08,5af6a15,m2_yolo26s_val_unobst,yolo26s_seg,LaRS train (-dev),val,1024,71.59,74.02,95.36,68.27,,NVIDIA GeForce RTX 5070 Ti,"50 epochs, best.pt (dev), conf 0.25, unassigned -> obst"
+2026-11-08,5af6a15-dirty,m2_yolo26s_val_unwater,yolo26s_seg,LaRS train (-dev),val,1024,73.15,74.4,95.38,69.77,,NVIDIA GeForce RTX 5070 Ti,"50 epochs, best.pt (dev), conf 0.25, unassigned -> water"
+2026-11-08,7042163-dirty,m2_yolo26s_val_c010_unobst,yolo26s_seg,LaRS train (-dev),val,1024,72.57,74.57,95.77,69.5,,NVIDIA GeForce RTX 5070 Ti,"best.pt (epoch 48), conf 0.10 chosen on dev, unassigned -> obst"
+2026-11-08,7042163-dirty,m2_yolo26s_val_c010_unwater,yolo26s_seg,LaRS train (-dev),val,1024,78.07,74.99,95.71,74.72,,NVIDIA GeForce RTX 5070 Ti,"best.pt (epoch 48), conf 0.10 chosen on dev, unassigned -> water"
+2026-11-08,7042163-dirty,m1_segformer_b2_val_s1536,segformer_b2,LaRS train (-dev),val,keep-ratio 1536x768,70.11,74.69,96.88,67.92,,NVIDIA GeForce RTX 5070 Ti,"30 epochs, last checkpoint, reduced inference scale for FPS parity"
+2026-11-08,7042163-dirty,m1_segformer_b2_val_s1024,segformer_b2,LaRS train (-dev),val,keep-ratio 1024x512,66.25,71.47,96.79,64.13,,NVIDIA GeForce RTX 5070 Ti,"30 epochs, last checkpoint, reduced inference scale for FPS parity"
+2026-11-12,4fe228a-dirty,m1_segformer_b2_e80_val_s2048,segformer_b2,LaRS train (-dev),val,keep-ratio 2048x1024,71.57,77.39,97.1,69.5,,NVIDIA GeForce RTX 5070 Ti,"80 epochs, last checkpoint (= best dev mIoU)"
+2026-11-12,4fe228a-dirty,m1_segformer_b2_e80_val_s1536,segformer_b2,LaRS train (-dev),val,keep-ratio 1536x768,72.42,75.67,97.15,70.36,,NVIDIA GeForce RTX 5070 Ti,"80 epochs, last checkpoint (= best dev mIoU)"

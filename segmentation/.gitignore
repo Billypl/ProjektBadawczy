@@ -1,0 +1,14 @@
+.venv/
+data/
+runs/
+third_party/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+__pycache__/
+.pytest_cache/
+*.egg-info/
+# contain LaRS images, do not redistribute via git
+results/figures/comparison/
+results/figures/rivers/
