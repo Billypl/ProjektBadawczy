@@ -22,7 +22,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import yaml
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 from common.interfaces import IGNORE
 from usvseg.data.lars import Lars, LarsSample
@@ -46,6 +46,18 @@ class SegDataset(Dataset):
         rng = np.random.default_rng([torch.initial_seed() % 2**32, i])
         s = self.samples[i]
         return self.transform(s.image(), s.semantic(), rng)
+
+
+def river_sampler(samples: list[LarsSample], fraction: float, gen: torch.Generator) -> WeightedRandomSampler:
+    """Draw with replacement so that river_like frames make up `fraction` of each epoch
+    (epoch length unchanged). Frames without a scene_type count as sea."""
+    ann = Lars("train").image_annotations["annotations"]
+    scene = {a["file_name"].rsplit(".", 1)[0]: a["labels"].get("scene_type") for a in ann}
+    river = np.array([scene.get(s.name) == "river_like" for s in samples])
+    # max(.., 1): a subset without one of the groups (smoke run) degrades to uniform
+    w = np.where(river, fraction / max(river.sum(), 1), (1 - fraction) / max((~river).sum(), 1))
+    print(f"river sampler: {river.sum()} river / {(~river).sum()} other frames, river share {fraction}", flush=True)
+    return WeightedRandomSampler(torch.from_numpy(w), num_samples=len(samples), replacement=True, generator=gen)
 
 
 def seed_everything(seed: int) -> None:
@@ -132,8 +144,11 @@ def main() -> None:
     # not persistent: workers are re-created each epoch, so their seeds come from the
     # generator state, which is saved in state.pt and makes a resumed run identical
     gen = torch.Generator().manual_seed(cfg["seed"])
-    loader = DataLoader(SegDataset(train, transform), batch_size=cfg["batch_size"], shuffle=True,
-                        num_workers=cfg["num_workers"], drop_last=True, pin_memory=True, generator=gen)
+    # river_fraction (optional): oversample river_like frames, used for H3
+    sampler = river_sampler(train, cfg["river_fraction"], gen) if cfg.get("river_fraction") else None
+    loader = DataLoader(SegDataset(train, transform), batch_size=cfg["batch_size"], shuffle=sampler is None,
+                        sampler=sampler, num_workers=cfg["num_workers"], drop_last=True, pin_memory=True,
+                        generator=gen)
 
     model = build_segformer(cfg["encoder"]).to(device).train()
     opt = cfg["optim"]
