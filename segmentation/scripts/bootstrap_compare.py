@@ -6,6 +6,9 @@ Resamples frames with replacement from the evaluator's frames.csv (both methods
 see the same resampled frames), recomputes F1 from summed TP/FP/FN and the mean
 per-frame WE_acc, and reports B - A with a 95% percentile CI. A CI that contains
 0 means the difference is within noise.
+
+--scene river_like / sea_like restricts both methods to the val frames of that LaRS
+scene type (image_annotations.json).
 """
 
 import argparse
@@ -31,9 +34,16 @@ def main() -> None:
     ap.add_argument("--b", nargs="+", required=True)
     ap.add_argument("--n", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--scene", choices=["river_like", "sea_like"])
+    ap.add_argument("--split", default="val")
     args = ap.parse_args()
 
     a = frames(args.a)
+    if args.scene:
+        from usvseg.data.lars import Lars
+        ann = Lars(args.split).image_annotations["annotations"]
+        names = {x["file_name"].rsplit(".", 1)[0] for x in ann if x["labels"].get("scene_type") == args.scene}
+        a = a[a.index.isin(names)]
     for exp in args.b:
         b = frames(exp).loc[a.index]
         idx = np.random.default_rng(args.seed).integers(0, len(a), size=(args.n, len(a)))
@@ -41,7 +51,7 @@ def main() -> None:
         for name, df in (("a", a), ("b", b)):
             tp, fp, fn = (df[c].to_numpy()[idx].sum(1) for c in ("TP", "FP", "FN"))
             stats[name] = {"F1": f1(tp, fp, fn), "mu": np.nanmean(df["WE_acc"].to_numpy()[idx], axis=1)}
-        print(f"{exp} - {args.a} ({len(a)} frames, {args.n} resamples)")
+        print(f"{exp} - {args.a} ({len(a)} {args.scene or 'all'} frames, {args.n} resamples)")
         for m in ("F1", "mu"):
             d = stats["b"][m] - stats["a"][m]
             lo, hi = np.percentile(d, [2.5, 97.5])

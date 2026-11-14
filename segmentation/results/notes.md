@@ -344,3 +344,28 @@ Conclusions (H1, current state):
   - Cheap, model-agnostic gain in F1, mostly by removing FP (SegFormer -216 FP) at the price of some missed small obstacles (SegFormer +21 FN, YOLO +12 FN). For a boat a missed obstacle is worse than a false alarm, so keep it a toggle; a tracker over time would be a safer place to drop one-frame blobs.
   - Gains more for SegFormer (it produces more speckle FP), so it narrows the F1 gap at full scale; at comparable FPS the optimistic YOLO variant is now significantly better on F1. H1 stays not supported.
   - The original idea (shore FP) needs a different tool: the FP pixels sit on the shore boundary, i.e. it is a boundary-accuracy problem, not a blob problem.
+
+## 2026-11-14 - FPS of the small-blob filter (idle GPU)
+
+- What: `usvseg.eval.fps` for SegFormer 80 ep with and without `--pp-max-area 50 --pp-shore-dist 0`, same session, GPU idle (0% before the run).
+- Result: 1536x768 24.1 -> 22.7 FPS (41.5 -> 44.1 ms); 2048x1024 13.9 -> 13.5 FPS (71.9 -> 74.2 ms). The filter costs ~2.5 ms per frame.
+- Conclusion: negligible cost; the FPS comparison with YOLO in the H1 table is unchanged.
+
+## 2026-11-14 - SegFormer-B2 with river oversampling (H3)
+
+- What: `configs/m1_segformer_b2_river.yaml` = m1_segformer_b2 (30 ep) + `river_fraction: 0.5`: `WeightedRandomSampler` with replacement, river_like frames are half of each epoch (529 of 2345 train frames, ~23% otherwise), epoch length unchanged. Separate run dir `runs/m1_segformer_b2_river/`. Checkpoint chosen on dev Q: `checkpoint_best` (epoch 25; dev F1 66.11 / mu 77.56 / mIoU 97.26 vs last 63.39 / 78.0 / 97.2; baseline 30 ep 67.24 / 78.19 / 97.53).
+- Why: H3 - does more river data in training improve rivers? Cheapest version: rebalance LaRS itself.
+- Val (`results/results.csv`): F1 67.56, mu 75.66, mIoU 95.33, Q 64.4 vs baseline 69.77 / 76.4 / 96.68 / 67.46. IoU obstacle 94.2 -> 91.8, water 97.9 -> 96.7.
+- Per scene (TP / FP / FN, F1, FP per frame, mean per-frame WE_acc):
+
+| scene | baseline 30 ep | river 50% |
+|---|---|---|
+| river_like (79) | 125 / 386 / 24, F1 37.9, 4.89 FP/frame, mu 74.8 | 125 / 427 / 24, F1 35.7, 5.41 FP/frame, mu 74.2 |
+| sea_like (119) | 818 / 267 / 140, F1 80.1, 2.24 FP/frame, mu 82.2 | 761 / 203 / 197, F1 79.2, 1.71 FP/frame, mu 81.5 |
+
+- Paired bootstrap (river - baseline): all frames F1 -2.2 (-4.7, +0.3) noise, mu -0.6 (-1.2, -0.1) significant; river frames F1 -2.3 (-5.9, +1.0), mu -0.6 (-1.4, +0.2) both noise; sea frames F1 -0.9 (noise), mu -0.7 (-1.4, -0.1) significant.
+- Conclusions:
+  - **Oversampling did not help rivers**: same TP and FN on rivers, slightly more river FP. On sea it trades FP for FN (more missed obstacles) and loses a bit of water-edge accuracy. Overall slightly worse; the baseline stays the reference.
+  - Likely reasons: the 529 river frames come from a limited number of sequences, so repeating them ~2x per epoch adds no new appearance (only 1333 unique frames per epoch); sea frames are seen less. The river problem found in the analysis (FP on the shore boundary and on reflections, very few GT obstacles per river frame) is not a frame-count problem.
+  - For H3: rebalancing LaRS is not enough; a test needs genuinely new river data (own recordings, external river sets) or targeted methods (boundary loss, stereo-based H2). One seed only, so the small negative differences are not a strong result either.
+  - The model is kept in `runs/m1_segformer_b2_river/` for comparison (switch by checkpoint path).
